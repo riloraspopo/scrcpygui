@@ -93,8 +93,8 @@ class ScannerApp:
         self.root.geometry("500x400")
         self.root.resizable(True, True)
         
-        # Screen state tracking (False = screen is on, True = screen is off)
-        self.screen_is_off = False
+        # We no longer need to track screen state with separate buttons
+        # The previous state tracking variable has been removed
         
         # Center the window
         self.center_window()
@@ -199,14 +199,14 @@ class ScannerApp:
         )
         self.screen_off_button.pack(side=tk.LEFT, padx=5)
         
-        # Refresh button
-        self.refresh_button = ttk.Button(
+        # Screen On button
+        self.screen_on_button = ttk.Button(
             button_frame, 
-            text="Refresh", 
-            command=self.refresh_scan,
-            state=tk.DISABLED
+            text="Screen On", 
+            command=self.screen_on,
+            state=tk.NORMAL
         )
-        self.refresh_button.pack(side=tk.LEFT, padx=5)
+        self.screen_on_button.pack(side=tk.LEFT, padx=5)
         
         # Exit button
         exit_button = ttk.Button(
@@ -229,10 +229,6 @@ class ScannerApp:
         scan_thread = threading.Thread(target=self.scan_thread)
         scan_thread.daemon = True
         scan_thread.start()
-    
-    def refresh_scan(self):
-        """Refresh the scan results"""
-        self.start_scan()
     
     def scan_thread(self):
         """Background thread for scanning"""
@@ -264,7 +260,6 @@ class ScannerApp:
             self.connect_button.config(state=tk.NORMAL)
             
         self.scan_button.config(state=tk.NORMAL)
-        self.refresh_button.config(state=tk.NORMAL)
         
     def connect_to_device(self):
         """Connect to the selected device"""
@@ -281,110 +276,90 @@ class ScannerApp:
         thread.daemon = True
         thread.start()
         
-    def screen_off(self):
-        """Toggle the device screen on/off by sending the appropriate keyboard shortcut to the scrcpy window"""
-        try:
-            # Try to find all scrcpy windows using a pattern match instead of exact name
+    def find_scrcpy_window(self):
+        """Find the scrcpy window and return its window ID"""
+        # Try to find all scrcpy windows using a pattern match instead of exact name
+        find_cmd = subprocess.run(
+            ['xdotool', 'search', '--class', 'scrcpy'], 
+            capture_output=True, 
+            text=True
+        )
+        
+        if not find_cmd.stdout.strip():
+            # Try alternative search if the class approach didn't work
             find_cmd = subprocess.run(
-                ['xdotool', 'search', '--class', 'scrcpy'], 
+                ['xdotool', 'search', '--name', 'scrcpy'], 
+                capture_output=True, 
+                text=True
+            )
+        
+        if not find_cmd.stdout.strip():
+            # Try one more approach - search for any window containing "scrcpy" in the name
+            find_cmd = subprocess.run(
+                ['xdotool', 'search', '--onlyvisible', '--name', '.*scrcpy.*'], 
                 capture_output=True, 
                 text=True
             )
             
-            if not find_cmd.stdout.strip():
-                # Try alternative search if the class approach didn't work
-                find_cmd = subprocess.run(
-                    ['xdotool', 'search', '--name', 'scrcpy'], 
-                    capture_output=True, 
-                    text=True
-                )
+        if find_cmd.stdout.strip():
+            window_ids = find_cmd.stdout.strip().split('\n')
+            # Use the latest window (usually the last in the list)
+            return window_ids[-1]
+        else:
+            return None
+    
+    def send_key_to_scrcpy(self, key_command, status_message, result_message):
+        """Send a keyboard shortcut to the scrcpy window"""
+        window_id = self.find_scrcpy_window()
+        
+        if window_id:
+            # Display a message to inform the user
+            self.status_label.config(text=f"Focusing scrcpy window and {status_message}")
             
-            if find_cmd.stdout.strip():
-                # Get the window IDs
-                window_ids = find_cmd.stdout.strip().split('\n')
-                # Use the latest window (usually the last in the list)
-                window_id = window_ids[-1]
-                
-                # Determine which command to send based on screen state
-                if not self.screen_is_off:
-                    # Screen is currently ON, turn it OFF with Alt+O
-                    key_command = 'alt+o'
-                    status_message = "Turning screen OFF..."
-                    result_message = "Screen turned OFF"
-                else:
-                    # Screen is currently OFF, turn it ON with Alt+Shift+O
-                    key_command = 'alt+shift+o'
-                    status_message = "Turning screen ON..."
-                    result_message = "Screen turned ON"
-                
-                # Display a message to inform the user
-                self.status_label.config(text=f"Focusing scrcpy window and {status_message}")
-                
-                # Update the UI to show immediate feedback
-                self.root.update_idletasks()
-                
-                # Give the GUI time to update
-                time.sleep(0.1)
-                
-                # Focus on the scrcpy window (use windowactivate for reliable focusing)
-                subprocess.run(['xdotool', 'windowactivate', '--sync', window_id])
-                
-                # Wait for window to be active
-                time.sleep(0.3)
-                
-                # Send keyboard shortcut using xdotool
-                subprocess.run(['xdotool', 'key', key_command])
-                
-                # Toggle the screen state
-                self.screen_is_off = not self.screen_is_off
-                
-                # Update button text and status label
-                self.screen_off_button.config(text="Screen On" if self.screen_is_off else "Screen Off")
-                self.status_label.config(text=result_message)
-            else:
-                # Try one more approach - search for any window containing "scrcpy" in the name
-                find_cmd = subprocess.run(
-                    ['xdotool', 'search', '--onlyvisible', '--name', '.*scrcpy.*'], 
-                    capture_output=True, 
-                    text=True
-                )
-                
-                if find_cmd.stdout.strip():
-                    window_ids = find_cmd.stdout.strip().split('\n')
-                    window_id = window_ids[-1]
-                    
-                    # Determine which command to send based on screen state
-                    if not self.screen_is_off:
-                        # Screen is currently ON, turn it OFF with Alt+O
-                        key_command = 'alt+o'
-                        status_message = "Turning screen OFF..."
-                        result_message = "Screen turned OFF"
-                    else:
-                        # Screen is currently OFF, turn it ON with Alt+Shift+O
-                        key_command = 'alt+shift+o'
-                        status_message = "Turning screen ON..."
-                        result_message = "Screen turned ON"
-                    
-                    self.status_label.config(text=f"Focusing scrcpy window (pattern match) and {status_message}")
-                    self.root.update_idletasks()
-                    time.sleep(0.1)
-                    
-                    subprocess.run(['xdotool', 'windowactivate', '--sync', window_id])
-                    time.sleep(0.3)
-                    subprocess.run(['xdotool', 'key', key_command])
-                    
-                    # Toggle the screen state
-                    self.screen_is_off = not self.screen_is_off
-                    
-                    # Update button text and status label
-                    self.screen_off_button.config(text="Screen On" if self.screen_is_off else "Screen Off")
-                    self.status_label.config(text=result_message)
-                else:
-                    self.status_label.config(text="No scrcpy window found. Launch scrcpy first.")
-                    messagebox.showinfo("No Window Found", "No scrcpy window found. Please connect to a device first.")
+            # Update the UI to show immediate feedback
+            self.root.update_idletasks()
+            
+            # Give the GUI time to update
+            time.sleep(0.1)
+            
+            # Focus on the scrcpy window (use windowactivate for reliable focusing)
+            subprocess.run(['xdotool', 'windowactivate', '--sync', window_id])
+            
+            # Wait for window to be active
+            time.sleep(0.3)
+            
+            # Send keyboard shortcut using xdotool
+            subprocess.run(['xdotool', 'key', key_command])
+            
+            # Update status label
+            self.status_label.config(text=result_message)
+            return True
+        else:
+            self.status_label.config(text="No scrcpy window found. Launch scrcpy first.")
+            messagebox.showinfo("No Window Found", "No scrcpy window found. Please connect to a device first.")
+            return False
+    
+    def screen_off(self):
+        """Turn the device screen off by sending Alt+O to the scrcpy window"""
+        try:
+            key_command = 'alt+o'
+            status_message = "Turning screen OFF..."
+            result_message = "Screen turned OFF"
+            self.send_key_to_scrcpy(key_command, status_message, result_message)
         except Exception as e:
-            self.status_label.config(text=f"Error sending screen command: {e}")
-            print(f"Error sending screen command: {e}")
+            self.status_label.config(text=f"Error turning screen off: {e}")
+            print(f"Error turning screen off: {e}")
+    
+    def screen_on(self):
+        """Turn the device screen on by sending Alt+Shift+O to the scrcpy window"""
+        try:
+            key_command = 'alt+shift+o'
+            status_message = "Turning screen ON..."
+            result_message = "Screen turned ON"
+            self.send_key_to_scrcpy(key_command, status_message, result_message)
+        except Exception as e:
+            self.status_label.config(text=f"Error turning screen on: {e}")
+            print(f"Error turning screen on: {e}")
 
 def main():
     root = tk.Tk()
