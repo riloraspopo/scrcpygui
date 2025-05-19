@@ -97,4 +97,20 @@ When connected through scrcpy, you can use these keyboard shortcuts:
 
 ---
 
+## Future Development: Android-to-Android Remote Control
+
+We're working on a complete mobile solution that will allow you to control one Android device from another Android device, without needing a computer:
+
+### Key Features of Upcoming Android App
+
+- **Direct Device-to-Device Control**: Control one Android device from another over WiFi
+- **Low Latency Streaming**: View the target device's screen in near real-time
+- **Touch Translation**: Control the target device with natural touch gestures
+- **Secure Connection**: Encrypted communication between devices
+- **No Root Required**: Uses Android's built-in APIs for screen capture and input
+
+For more details, see our [Android Development Plan](AndroidCompanion.md).
+
+---
+
 Made with ❤️ by [Your Name]
